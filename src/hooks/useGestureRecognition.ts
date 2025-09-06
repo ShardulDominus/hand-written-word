@@ -185,7 +185,8 @@ export const useGestureRecognition = () => {
 
     try {
       // Detect hand landmarks
-      const results = handLandmarkerRef.current.detect(videoRef.current);
+      const nowInMs = performance.now();
+      const results = handLandmarkerRef.current.detectForVideo(videoRef.current, nowInMs);
       
       if (results.landmarks && results.landmarks.length > 0) {
         // Convert landmarks to the format expected by recognizeGesture
@@ -284,6 +285,8 @@ export const useGestureRecognition = () => {
       });
       
       streamRef.current = stream;
+      videoRef.current.muted = true;
+      videoRef.current.playsInline = true;
       videoRef.current.srcObject = stream;
       
       // Wait for video to be ready
@@ -294,6 +297,9 @@ export const useGestureRecognition = () => {
           };
         }
       });
+      
+      // Start playback to avoid black screen on some browsers
+      await videoRef.current?.play?.();
       
       // Set canvas dimensions to match video
       canvasRef.current.width = videoRef.current.videoWidth;
