@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Hands } from '@mediapipe/hands';
-import { Camera } from '@mediapipe/camera_utils';
+import * as HandsModule from '@mediapipe/hands';
+import * as CameraModule from '@mediapipe/camera_utils';
 
 export interface GestureResult {
   gesture: string;
@@ -242,7 +242,7 @@ export const useGestureRecognition = () => {
       if (!videoRef.current) return;
       
       // Initialize MediaPipe Hands
-      const hands = new (Hands as any).Hands({
+      const hands = new HandsModule.Hands({
         locateFile: (file) => {
           return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
         }
@@ -259,7 +259,7 @@ export const useGestureRecognition = () => {
       handsRef.current = hands;
       
       // Initialize camera
-      const camera = new (Camera as any).Camera(videoRef.current, {
+      const camera = new CameraModule.Camera(videoRef.current, {
         onFrame: async () => {
           if (handsRef.current && videoRef.current) {
             await handsRef.current.send({ image: videoRef.current });
