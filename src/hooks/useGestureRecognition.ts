@@ -166,8 +166,8 @@ const recognizeGesture = (landmarks: any[]): GestureResult => {
 export const useGestureRecognition = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const handsRef = useRef<Hands | null>(null);
-  const cameraRef = useRef<Camera | null>(null);
+  const handsRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
   
   const [isActive, setIsActive] = useState(false);
   const [currentGesture, setCurrentGesture] = useState<GestureResult>({ gesture: '', confidence: 0 });
@@ -242,7 +242,7 @@ export const useGestureRecognition = () => {
       if (!videoRef.current) return;
       
       // Initialize MediaPipe Hands
-      const hands = new Hands({
+      const hands = new (Hands as any).Hands({
         locateFile: (file) => {
           return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
         }
@@ -259,7 +259,7 @@ export const useGestureRecognition = () => {
       handsRef.current = hands;
       
       // Initialize camera
-      const camera = new Camera(videoRef.current, {
+      const camera = new (Camera as any).Camera(videoRef.current, {
         onFrame: async () => {
           if (handsRef.current && videoRef.current) {
             await handsRef.current.send({ image: videoRef.current });
