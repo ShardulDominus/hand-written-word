@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import { Hands } from '@mediapipe/hands';
+import { Camera } from '@mediapipe/camera_utils';
 
 export interface GestureResult {
   gesture: string;
@@ -165,184 +166,124 @@ const recognizeGesture = (landmarks: any[]): GestureResult => {
 export const useGestureRecognition = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const handLandmarkerRef = useRef<HandLandmarker | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const lastVideoTimeRef = useRef<number>(-1);
+  const handsRef = useRef<Hands | null>(null);
+  const cameraRef = useRef<Camera | null>(null);
   
   const [isActive, setIsActive] = useState(false);
   const [currentGesture, setCurrentGesture] = useState<GestureResult>({ gesture: '', confidence: 0 });
   const [error, setError] = useState<string>('');
 
-  const detectHandGestures = useCallback(async () => {
-    if (!handLandmarkerRef.current || !videoRef.current || !canvasRef.current) return;
+  const onResults = useCallback((results: any) => {
+    if (!canvasRef.current) return;
     
     const canvasCtx = canvasRef.current.getContext('2d');
     if (!canvasCtx) return;
-    if (videoRef.current.readyState < 2) {
-      if (isActive) requestAnimationFrame(detectHandGestures);
-      return;
-    }
 
-    // Clear canvas and draw video frame
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-    canvasCtx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    
+    if (videoRef.current) {
+      canvasCtx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
 
-    try {
-      // Detect hand landmarks
-      const currentTimeMs = Math.round(videoRef.current.currentTime * 1000);
-      if (currentTimeMs === lastVideoTimeRef.current) {
-        if (isActive) requestAnimationFrame(detectHandGestures);
-        canvasCtx.restore();
-        return;
-      }
-      lastVideoTimeRef.current = currentTimeMs;
-      const results = handLandmarkerRef.current.detectForVideo(videoRef.current, currentTimeMs);
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      const gesture = recognizeGesture(results.multiHandLandmarks);
+      setCurrentGesture(gesture);
       
-      if (results.landmarks && results.landmarks.length > 0) {
-        // Convert landmarks to the format expected by recognizeGesture
-        const landmarks = results.landmarks.map(handLandmarks => 
-          handLandmarks.map(landmark => ({
-            x: landmark.x,
-            y: landmark.y,
-            z: landmark.z
-          }))
-        );
+      // Draw hand landmarks
+      for (const landmarks of results.multiHandLandmarks) {
+        canvasCtx.fillStyle = 'hsl(210, 100%, 56%)';
+        canvasCtx.strokeStyle = 'hsl(180, 100%, 42%)';
+        canvasCtx.lineWidth = 2;
         
-        const gesture = recognizeGesture(landmarks);
-        setCurrentGesture(gesture);
+        // Draw connections
+        const connections = [
+          [0, 1], [1, 2], [2, 3], [3, 4], // thumb
+          [0, 5], [5, 6], [6, 7], [7, 8], // index
+          [0, 9], [9, 10], [10, 11], [11, 12], // middle
+          [0, 13], [13, 14], [14, 15], [15, 16], // ring
+          [0, 17], [17, 18], [18, 19], [19, 20], // pinky
+          [5, 9], [9, 13], [13, 17] // palm
+        ];
         
-        // Draw hand landmarks
-        for (const handLandmarks of results.landmarks) {
-          canvasCtx.fillStyle = 'hsl(210, 100%, 56%)';
-          canvasCtx.strokeStyle = 'hsl(180, 100%, 42%)';
-          canvasCtx.lineWidth = 2;
-          
-          // Draw connections
-          const connections = [
-            [0, 1], [1, 2], [2, 3], [3, 4], // thumb
-            [0, 5], [5, 6], [6, 7], [7, 8], // index
-            [0, 9], [9, 10], [10, 11], [11, 12], // middle
-            [0, 13], [13, 14], [14, 15], [15, 16], // ring
-            [0, 17], [17, 18], [18, 19], [19, 20], // pinky
-            [5, 9], [9, 13], [13, 17] // palm
-          ];
-          
-          canvasCtx.beginPath();
-          for (const [start, end] of connections) {
-            const startPoint = handLandmarks[start];
-            const endPoint = handLandmarks[end];
-            canvasCtx.moveTo(startPoint.x * canvasRef.current.width, startPoint.y * canvasRef.current.height);
-            canvasCtx.lineTo(endPoint.x * canvasRef.current.width, endPoint.y * canvasRef.current.height);
-          }
-          canvasCtx.stroke();
-          
-          // Draw landmarks
-          for (const landmark of handLandmarks) {
-            canvasCtx.beginPath();
-            canvasCtx.arc(
-              landmark.x * canvasRef.current.width,
-              landmark.y * canvasRef.current.height,
-              3,
-              0,
-              2 * Math.PI
-            );
-            canvasCtx.fill();
-          }
+        canvasCtx.beginPath();
+        for (const [start, end] of connections) {
+          const startPoint = landmarks[start];
+          const endPoint = landmarks[end];
+          canvasCtx.moveTo(startPoint.x * canvasRef.current.width, startPoint.y * canvasRef.current.height);
+          canvasCtx.lineTo(endPoint.x * canvasRef.current.width, endPoint.y * canvasRef.current.height);
         }
-      } else {
-        setCurrentGesture({ gesture: '', confidence: 0 });
+        canvasCtx.stroke();
+        
+        // Draw landmarks
+        for (const landmark of landmarks) {
+          canvasCtx.beginPath();
+          canvasCtx.arc(
+            landmark.x * canvasRef.current.width,
+            landmark.y * canvasRef.current.height,
+            3,
+            0,
+            2 * Math.PI
+          );
+          canvasCtx.fill();
+        }
       }
-    } catch (error) {
-      console.error('Hand detection error:', error);
+    } else {
+      setCurrentGesture({ gesture: '', confidence: 0 });
     }
     
     canvasCtx.restore();
-    
-    // Continue detection loop
-    if (isActive) {
-      requestAnimationFrame(detectHandGestures);
-    }
-  }, [isActive]);
+  }, []);
 
   const startCamera = useCallback(async () => {
     try {
       setError('');
       
-      if (!videoRef.current || !canvasRef.current) return;
+      if (!videoRef.current) return;
       
-      // Initialize MediaPipe HandLandmarker
-      const vision = await FilesetResolver.forVisionTasks(
-        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
-      );
-      
-      const handLandmarker = await HandLandmarker.createFromOptions(vision, {
-        baseOptions: {
-          modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-          delegate: "GPU"
-        },
-        numHands: 1,
-        runningMode: "VIDEO",
-        minHandDetectionConfidence: 0.5,
-        minHandPresenceConfidence: 0.5,
-        minTrackingConfidence: 0.5
-      });
-      
-      handLandmarkerRef.current = handLandmarker;
-      
-      // Get user media
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 640, height: 480 }
-      });
-      
-      streamRef.current = stream;
-      videoRef.current.muted = true;
-      videoRef.current.playsInline = true;
-      videoRef.current.srcObject = stream;
-      
-      // Wait for video to be ready
-      await new Promise((resolve) => {
-        if (videoRef.current) {
-          videoRef.current.onloadedmetadata = () => {
-            resolve(true);
-          };
+      // Initialize MediaPipe Hands
+      const hands = new Hands({
+        locateFile: (file) => {
+          return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
         }
       });
       
-      // Start playback to avoid black screen on some browsers
-      await videoRef.current?.play?.();
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
       
-      // Set canvas dimensions to match video
-      canvasRef.current.width = videoRef.current.videoWidth;
-      canvasRef.current.height = videoRef.current.videoHeight;
+      hands.onResults(onResults);
+      handsRef.current = hands;
       
+      // Initialize camera
+      const camera = new Camera(videoRef.current, {
+        onFrame: async () => {
+          if (handsRef.current && videoRef.current) {
+            await handsRef.current.send({ image: videoRef.current });
+          }
+        },
+        width: 640,
+        height: 480
+      });
+      
+      cameraRef.current = camera;
+      await camera.start();
       setIsActive(true);
-      detectHandGestures();
       
     } catch (err) {
       console.error('Error starting camera:', err);
       setError('Unable to access camera. Please ensure camera permissions are granted.');
     }
-  }, [detectHandGestures]);
+  }, [onResults]);
 
   const stopCamera = useCallback(() => {
+    if (cameraRef.current) {
+      cameraRef.current.stop();
+    }
     setIsActive(false);
-    
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
-    }
-    
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    
-    if (handLandmarkerRef.current) {
-      handLandmarkerRef.current.close();
-      handLandmarkerRef.current = null;
-    }
-    
-    lastVideoTimeRef.current = -1;
     setCurrentGesture({ gesture: '', confidence: 0 });
   }, []);
 
