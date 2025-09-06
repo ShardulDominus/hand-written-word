@@ -167,6 +167,7 @@ export const useGestureRecognition = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const handLandmarkerRef = useRef<HandLandmarker | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const lastVideoTimeRef = useRef<number>(-1);
   
   const [isActive, setIsActive] = useState(false);
   const [currentGesture, setCurrentGesture] = useState<GestureResult>({ gesture: '', confidence: 0 });
@@ -177,6 +178,10 @@ export const useGestureRecognition = () => {
     
     const canvasCtx = canvasRef.current.getContext('2d');
     if (!canvasCtx) return;
+    if (videoRef.current.readyState < 2) {
+      if (isActive) requestAnimationFrame(detectHandGestures);
+      return;
+    }
 
     // Clear canvas and draw video frame
     canvasCtx.save();
@@ -185,8 +190,14 @@ export const useGestureRecognition = () => {
 
     try {
       // Detect hand landmarks
-      const nowInMs = performance.now();
-      const results = handLandmarkerRef.current.detectForVideo(videoRef.current, nowInMs);
+      const currentTimeMs = Math.round(videoRef.current.currentTime * 1000);
+      if (currentTimeMs === lastVideoTimeRef.current) {
+        if (isActive) requestAnimationFrame(detectHandGestures);
+        canvasCtx.restore();
+        return;
+      }
+      lastVideoTimeRef.current = currentTimeMs;
+      const results = handLandmarkerRef.current.detectForVideo(videoRef.current, currentTimeMs);
       
       if (results.landmarks && results.landmarks.length > 0) {
         // Convert landmarks to the format expected by recognizeGesture
@@ -331,6 +342,7 @@ export const useGestureRecognition = () => {
       handLandmarkerRef.current = null;
     }
     
+    lastVideoTimeRef.current = -1;
     setCurrentGesture({ gesture: '', confidence: 0 });
   }, []);
 
