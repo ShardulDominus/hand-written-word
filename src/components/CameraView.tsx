@@ -52,8 +52,9 @@ export const CameraView: React.FC = () => {
           <video
             ref={videoRef}
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ display: 'none' }}
             playsInline
+            muted
+            autoPlay
           />
           <canvas
             ref={canvasRef}
